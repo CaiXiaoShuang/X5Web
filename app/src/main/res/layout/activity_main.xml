@@ -2,7 +2,6 @@
     android:layout_width="fill_parent"
     android:layout_height="fill_parent"
     android:orientation="vertical">
-
     <ProgressBar
         android:id="@+id/progressBar1"
         style="?android:attr/progressBarStyleHorizontal"
@@ -14,10 +13,6 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
-        <!--<com.hatsune.x5web.utils.X5WebView-->
-        <!--android:id="@+id/webView1"-->
-        <!--android:layout_width="match_parent"-->
-        <!--android:layout_height="match_parent"></com.hatsune.x5web.utils.X5WebView>-->
         <com.tencent.smtt.sdk.WebView
             android:id="@+id/webView1"
             android:layout_width="match_parent"
