@@ -64,8 +64,7 @@ public class MainActivity extends Activity {
         // null,
         // android.R.attr.progressBarStyleHorizontal);
         mPageLoadingProgressBar.setMax(100);
-        mPageLoadingProgressBar.setProgressDrawable(this.getResources()
-                .getDrawable(R.drawable.color_progressbar));
+        mPageLoadingProgressBar.setProgressDrawable(this.getResources().getDrawable(R.drawable.color_progressbar));
     }
 
     private void init() {
@@ -88,9 +87,19 @@ public class MainActivity extends Activity {
         mWebView.setWebChromeClient(new WebChromeClient() {
 
             @Override
-            public boolean onJsConfirm(WebView arg0, String arg1, String arg2,
-                                       JsResult arg3) {
+            public boolean onJsConfirm(WebView arg0, String arg1, String arg2, JsResult arg3) {
                 return super.onJsConfirm(arg0, arg1, arg2, arg3);
+            }
+
+            @Override
+            public void onProgressChanged(WebView webView, int newProgress) {
+                if(newProgress==100){
+                    mPageLoadingProgressBar.setVisibility(View.GONE);//加载完网页进度条消失
+                }
+                else{
+                    mPageLoadingProgressBar.setVisibility(View.VISIBLE);//开始加载网页时显示进度条
+                    mPageLoadingProgressBar.setProgress(newProgress);//设置进度值
+                }
             }
 
             View myVideoView;
@@ -125,8 +134,7 @@ public class MainActivity extends Activity {
             }
 
             @Override
-            public boolean onJsAlert(WebView arg0, String arg1, String arg2,
-                                     JsResult arg3) {
+            public boolean onJsAlert(WebView arg0, String arg1, String arg2, JsResult arg3) {
                 /**
                  * 这里写入你自定义的window alert
                  */
