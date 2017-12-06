@@ -2,164 +2,297 @@ package com.hatsune.x5web;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.graphics.PixelFormat;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.view.KeyEvent;
-import android.view.Menu;
 import android.view.View;
-import android.widget.AdapterView;
-import android.widget.AdapterView.OnItemClickListener;
-import android.widget.GridView;
-import android.widget.SimpleAdapter;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import android.widget.ProgressBar;
+import android.widget.Toast;
 
-import java.util.ArrayList;
-import java.util.HashMap;
+import com.tencent.smtt.export.external.interfaces.IX5WebChromeClient;
+import com.tencent.smtt.export.external.interfaces.JsResult;
+import com.tencent.smtt.sdk.CookieSyncManager;
+import com.tencent.smtt.sdk.DownloadListener;
+import com.tencent.smtt.sdk.ValueCallback;
+import com.tencent.smtt.sdk.WebChromeClient;
+import com.tencent.smtt.sdk.WebSettings;
+import com.tencent.smtt.sdk.WebView;
+import com.tencent.smtt.sdk.WebViewClient;
+import com.tencent.smtt.utils.TbsLog;
 
 public class MainActivity extends Activity {
+    /***
+     * 使用腾讯com.tencent.smtt.sdk.WebView
+     * */
 
-	public static boolean firstOpening = true;
-	private static String[] titles = null;
+    private WebView mWebView;
+    private static final String mHomeUrl = "https://www.baidu.com/";
+    private static final String TAG = "SdkDemo";
+    private static final int MAX_LENGTH = 14;
+    private boolean mNeedTestPage = false;
+    private ProgressBar mPageLoadingProgressBar = null;
+    private ValueCallback<Uri> uploadFile;
 
-	public static final int MSG_WEBVIEW_CONSTRUCTOR = 1;
-	public static final int MSG_WEBVIEW_POLLING = 2;
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        getWindow().setFormat(PixelFormat.TRANSLUCENT);
+        try {
+            if (Integer.parseInt(android.os.Build.VERSION.SDK) >= 11) {
+                getWindow()
+                        .setFlags(
+                                android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+                                android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED);
+            }
+        } catch (Exception e) {
+        }
+        setContentView(R.layout.activity_main);
+        mTestHandler.sendEmptyMessageDelayed(MSG_INIT_UI, 10);
 
-	// /////////////////////////////////////////////////////////////////////////////////////////////////
-	// add constant here
-	private static final int TBS_WEB = 0;
-	private static final int FULL_SCREEN_VIDEO = 1;
-	private static final int FILE_CHOOSER = 2;
+    }
 
-	// /////////////////////////////////////////////////////////////////////////////////////////////
-	// for view init
-	private Context mContext = null;
-	private SimpleAdapter gridAdapter;
-	private GridView gridView;
-	private ArrayList<HashMap<String, Object>> items;
+    private void initProgressBar() {
+        mPageLoadingProgressBar = (ProgressBar) findViewById(R.id.progressBar1);// new
+        // ProgressBar(getApplicationContext(),
+        // null,
+        // android.R.attr.progressBarStyleHorizontal);
+        mPageLoadingProgressBar.setMax(100);
+        mPageLoadingProgressBar.setProgressDrawable(this.getResources()
+                .getDrawable(R.drawable.color_progressbar));
+    }
 
-	private static boolean main_initialized = false;
+    private void init() {
+        mWebView = (WebView) findViewById(R.id.webView1);
+        initProgressBar();
+        mWebView.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                return false;
+            }
 
-	// ////////////////////////////////////////////////////////////////////////////////////////////////
-	// Activity OnCreate
-	@Override
-	protected void onCreate(Bundle savedInstanceState) {
-		super.onCreate(savedInstanceState);
-		setContentView(R.layout.activity_main_advanced);
-		mContext = this;
-		if (!main_initialized) {
-			this.new_init();
-		}
-	}
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                mTestHandler.sendEmptyMessageDelayed(MSG_OPEN_TEST_URL, 5000);// 5s?
 
-	// ////////////////////////////////////////////////////////////////////////////////////////////////
-	// Activity OnResume
-	@Override
-	protected void onResume() {
-		this.new_init();
+            }
+        });
 
-		// this.gridView.setAdapter(gridAdapter);
-		super.onResume();
-	}
+        mWebView.setWebChromeClient(new WebChromeClient() {
 
-	// ////////////////////////////////////////////////////////////////////////////////
-	// initiate new UI content
-	private void new_init() {
-		items = new ArrayList<HashMap<String, Object>>();
-		this.gridView = (GridView) this.findViewById(R.id.item_grid);
+            @Override
+            public boolean onJsConfirm(WebView arg0, String arg1, String arg2,
+                                       JsResult arg3) {
+                return super.onJsConfirm(arg0, arg1, arg2, arg3);
+            }
 
-		if (gridView == null)
-			throw new IllegalArgumentException("the gridView is null");
+            View myVideoView;
+            View myNormalView;
+            IX5WebChromeClient.CustomViewCallback callback;
 
-		titles = getResources().getStringArray(R.array.index_titles);
-		int[] iconResourse = { R.drawable.tbsweb, R.drawable.fullscreen,
-				R.drawable.filechooser };
+            /**
+             * 全屏播放配置
+             */
+            @Override
+            public void onShowCustomView(View view, IX5WebChromeClient.CustomViewCallback customViewCallback) {
+                FrameLayout normalView = (FrameLayout) findViewById(R.id.web_filechooser);
+                ViewGroup viewGroup = (ViewGroup) normalView.getParent();
+                viewGroup.removeView(normalView);
+                viewGroup.addView(view);
+                myVideoView = view;
+                myNormalView = normalView;
+                callback = customViewCallback;
+            }
 
-		HashMap<String, Object> item = null;
-		// HashMap<String, ImageView> block = null;
-		for (int i = 0; i < titles.length; i++) {
-			item = new HashMap<String, Object>();
-			item.put("title", titles[i]);
-			item.put("icon", iconResourse[i]);
+            @Override
+            public void onHideCustomView() {
+                if (callback != null) {
+                    callback.onCustomViewHidden();
+                    callback = null;
+                }
+                if (myVideoView != null) {
+                    ViewGroup viewGroup = (ViewGroup) myVideoView.getParent();
+                    viewGroup.removeView(myVideoView);
+                    viewGroup.addView(myNormalView);
+                }
+            }
 
-			items.add(item);
-		}
-		this.gridAdapter = new SimpleAdapter(this, items,
-				R.layout.function_block, new String[] { "title", "icon" },
-				new int[] { R.id.Item_text, R.id.Item_bt });
-		if (null != this.gridView) {
-			this.gridView.setAdapter(gridAdapter);
-			this.gridAdapter.notifyDataSetChanged();
-			this.gridView.setOnItemClickListener(new OnItemClickListener() {
+            @Override
+            public boolean onJsAlert(WebView arg0, String arg1, String arg2,
+                                     JsResult arg3) {
+                /**
+                 * 这里写入你自定义的window alert
+                 */
+                return super.onJsAlert(null, arg1, arg2, arg3);
+            }
+        });
 
-				@Override
-				public void onItemClick(AdapterView<?> gridView, View view,
-						int position, long id) {
-					Intent intent = null;
-					switch (position) {
-					case FILE_CHOOSER: {
-						intent = new Intent(MainActivity.this,
-								FilechooserActivity.class);
-						MainActivity.this.startActivity(intent);
+        mWebView.setDownloadListener(new DownloadListener() {
 
-					}
-						break;
-					case FULL_SCREEN_VIDEO: {
-						intent = new Intent(MainActivity.this,
-								FullScreenActivity.class);
-						MainActivity.this.startActivity(intent);
-					}
-						break;
+            @Override
+            public void onDownloadStart(String arg0, String arg1, String arg2,
+                                        String arg3, long arg4) {
+                TbsLog.d(TAG, "url: " + arg0);
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle("allow to download？")
+                        .setPositiveButton("yes",
+                                new DialogInterface.OnClickListener() {
+                                    @Override
+                                    public void onClick(DialogInterface dialog,
+                                                        int which) {
+                                        Toast.makeText(
+                                                MainActivity.this,
+                                                "fake message: i'll download...",
+                                                Toast.LENGTH_LONG).show();
+                                    }
+                                })
+                        .setNegativeButton("no",
+                                new DialogInterface.OnClickListener() {
 
-					case TBS_WEB: {
-						intent = new Intent(MainActivity.this,
-								BrowserActivity.class);
-						MainActivity.this.startActivity(intent);
+                                    @Override
+                                    public void onClick(DialogInterface dialog,
+                                                        int which) {
+                                        // TODO Auto-generated method stub
+                                        Toast.makeText(
+                                                MainActivity.this,
+                                                "fake message: refuse download...",
+                                                Toast.LENGTH_SHORT).show();
+                                    }
+                                })
+                        .setOnCancelListener(
+                                new DialogInterface.OnCancelListener() {
 
-					}
-						break;
+                                    @Override
+                                    public void onCancel(DialogInterface dialog) {
+                                        // TODO Auto-generated method stub
+                                        Toast.makeText(
+                                                MainActivity.this,
+                                                "fake message: refuse download...",
+                                                Toast.LENGTH_SHORT).show();
+                                    }
+                                }).show();
+            }
+        });
 
-					}
+        WebSettings webSetting = mWebView.getSettings();
+        webSetting.setAllowFileAccess(true);
+        webSetting.setLayoutAlgorithm(WebSettings.LayoutAlgorithm.NARROW_COLUMNS);
+        webSetting.setSupportZoom(true);
+        webSetting.setBuiltInZoomControls(true);
+        webSetting.setUseWideViewPort(true);
+        webSetting.setSupportMultipleWindows(false);
+        // webSetting.setLoadWithOverviewMode(true);
+        webSetting.setAppCacheEnabled(true);
+        // webSetting.setDatabaseEnabled(true);
+        webSetting.setDomStorageEnabled(true);
+        webSetting.setJavaScriptEnabled(true);
+        webSetting.setGeolocationEnabled(true);
+        webSetting.setAppCacheMaxSize(Long.MAX_VALUE);
+        webSetting.setAppCachePath(this.getDir("appcache", 0).getPath());
+        webSetting.setDatabasePath(this.getDir("databases", 0).getPath());
+        webSetting.setGeolocationDatabasePath(this.getDir("geolocation", 0)
+                .getPath());
+        // webSetting.setPageCacheCapacity(IX5WebSettings.DEFAULT_CACHE_CAPACITY);
+        webSetting.setPluginState(WebSettings.PluginState.ON_DEMAND);
+        // webSetting.setRenderPriority(WebSettings.RenderPriority.HIGH);
+        // webSetting.setPreFectch(true);
+        long time = System.currentTimeMillis();
+        mWebView.loadUrl(mHomeUrl);
+        TbsLog.d("time-cost", "cost time: "
+                + (System.currentTimeMillis() - time));
+        CookieSyncManager.createInstance(this);
+        CookieSyncManager.getInstance().sync();
+    }
 
-				}
-			});
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
 
-		}
-		main_initialized = true;
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            if (mWebView != null && mWebView.canGoBack()) {
+                mWebView.goBack();
+                return true;
+            } else
+                return super.onKeyDown(keyCode, event);
+        }
+        return super.onKeyDown(keyCode, event);
+    }
 
-	}
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        TbsLog.d(TAG, "onActivityResult, requestCode:" + requestCode + ",resultCode:" + resultCode);
+        if (resultCode == RESULT_OK) {
+            switch (requestCode) {
+                case 0:
+                    if (null != uploadFile) {
+                        Uri result = data == null || resultCode != RESULT_OK ? null
+                                : data.getData();
+                        uploadFile.onReceiveValue(result);
+                        uploadFile = null;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        } else if (resultCode == RESULT_CANCELED) {
+            if (null != uploadFile) {
+                uploadFile.onReceiveValue(null);
+                uploadFile = null;
+            }
 
-	// ///////////////////////////////////////////////////////////////////////////////////////////
-	// Activity menu
-	@Override
-	public boolean onCreateOptionsMenu(Menu menu) {
-		// Inflate the menu; this adds items to the action bar if it is present.
-		return true;
-	}
+        }
 
-	@Override
-	public boolean onKeyDown(int keyCode, KeyEvent event) {
-		// TODO Auto-generated method stub
-		switch (keyCode) {
-		case KeyEvent.KEYCODE_BACK:
-			this.tbsSuiteExit();
-		}
-		return super.onKeyDown(keyCode, event);
-	}
+    }
 
-	private void tbsSuiteExit() {
-		// exit TbsSuite?
-		AlertDialog.Builder dialog = new AlertDialog.Builder(mContext);
-		dialog.setTitle("X5功能演示");
-		dialog.setPositiveButton("OK", new AlertDialog.OnClickListener() {
+    @Override
+    protected void onNewIntent(Intent intent) {
+        if (intent == null || mWebView == null || intent.getData() == null)
+            return;
+        mWebView.loadUrl(intent.getData().toString());
+    }
 
-			@Override
-			public void onClick(DialogInterface dialog, int which) {
-				// TODO Auto-generated method stub
-				finish();
-			}
-		});
-		dialog.setMessage("quit now?");
-		dialog.create().show();
-	}
+    @Override
+    protected void onDestroy() {
+        if (mTestHandler != null)
+            mTestHandler.removeCallbacksAndMessages(null);
+        if (mWebView != null)
+            mWebView.destroy();
+        super.onDestroy();
+    }
+
+    public static final int MSG_OPEN_TEST_URL = 0;
+    public static final int MSG_INIT_UI = 1;
+    private final int mUrlStartNum = 0;
+    private int mCurrentUrl = mUrlStartNum;
+    private Handler mTestHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case MSG_OPEN_TEST_URL:
+                    if (!mNeedTestPage) {
+                        return;
+                    }
+
+                    String testUrl = "file:///sdcard/outputHtml/html/"
+                            + Integer.toString(mCurrentUrl) + ".html";
+                    if (mWebView != null) {
+                        mWebView.loadUrl(testUrl);
+                    }
+
+                    mCurrentUrl++;
+                    break;
+                case MSG_INIT_UI:
+                    init();
+                    break;
+            }
+            super.handleMessage(msg);
+        }
+    };
+
 }
